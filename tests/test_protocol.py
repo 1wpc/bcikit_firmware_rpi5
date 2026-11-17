@@ -35,6 +35,7 @@ class ProtocolTest(unittest.TestCase):
         def command(code, payload=b""):
             request = p.feed(control_frame(COMMAND, code, code, payload=payload))[0]
             return device.command(request)
+        self.assertEqual(command(11, b"hello")[12:17], b"hello")
         self.assertEqual(command(12, b"\0")[9], 0)
         self.assertEqual(command(7, b"\2")[9], 0)
         self.assertEqual(command(3)[9], 0)

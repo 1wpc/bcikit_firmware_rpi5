@@ -109,10 +109,11 @@ class Device:
     def command(self, request: Request, transport: str = "bcikit") -> bytes:
         code, value = request.code, request.payload
         expected = {1: 0, 2: 0, 3: 0, 4: 0, 5: 1, 6: 2, 7: 1,
-                    8: 1, 9: 1, 10: 0, 11: 0, 12: 1}
+                    8: 1, 9: 1, 10: 0, 12: 1}
         if code not in expected:
-            return control_frame(ACK, request.request_id, code, INVALID_COMMAND)
-        if len(value) != expected[code]:
+            if code != 11:
+                return control_frame(ACK, request.request_id, code, INVALID_COMMAND)
+        if code in expected and len(value) != expected[code]:
             return control_frame(ACK, request.request_id, code, INVALID_LENGTH)
         if code == 1:
             return self.info(request.request_id)
