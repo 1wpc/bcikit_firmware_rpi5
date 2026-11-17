@@ -36,7 +36,7 @@ Remove `--simulate` only after the AFE is correctly wired, SPI0 enabled and the 
 
 For a LAN host, use `http://<pi-ip>:8080`. The current BCIKit Studio `WiFiTransport` can be instantiated with `device_ip=<pi-ip>`, `device_port=8080`, and `require_softap_subnet=False`; its existing GUI currently assumes the ESP32 hotspot subnet and needs a Pi/LAN connection option. Alternatively, a custom client may connect directly to `<pi-ip>:6677` and send the same binary COMMAND frames. Do not switch the development Mac's Wi-Fi to a device hotspot.
 
-The HTTP `/tcp` endpoint accepts a JSON object `{"ip":"<requesting-host-ip>","port":45123,"output":"auto"}` and opens a reverse TCP connection to that listener. The first valid BCIKit COMMAND claims native mode; `output:"raw"` selects OpenBCI. Only the same requester IP may replace a stale session; disconnect/DELETE automatically stops acquisition. For a native client, send `PING`, `GET_INFO`, `STOP`, `SET_*`, `START`, then read interleaved ACK and SAMPLE frames. The complete binary layout is in the main BCIKit repository's `protocol/BCIKit_Device_Control_Protocol_v1.md` and `protocol/BCIKit_Raw_Stream_Protocol_v1.md`.
+The HTTP `/tcp` endpoint accepts a JSON object `{"ip":"<requesting-host-ip>","port":45123,"output":"auto"}` and opens a reverse TCP connection to that listener. The first valid BCIKit COMMAND claims native mode; `output:"raw"` selects OpenBCI. Only the same requester IP may replace a stale session; disconnect/DELETE automatically stops acquisition. For a native client, send `PING`, `GET_INFO`, `STOP`, `SET_*`, `START`, then read interleaved ACK and SAMPLE frames. See [PROTOCOL.md](PROTOCOL.md) for the complete public wire contract.
 
 ## Status and troubleshooting
 
