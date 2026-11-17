@@ -58,6 +58,7 @@ class DeviceConfigurationTest(unittest.TestCase):
         self.assertEqual(device.counters[2], 1)
         self.assertEqual(device.counters[1], 1)
         self.assertEqual(device.samples.qsize(), 1)
+        self.assertEqual(device.last_error, "")
 
 
 if __name__ == "__main__":

@@ -43,6 +43,8 @@ class Device:
                 if sample is None:
                     self.counters[4] += 1
                     continue
+                if consecutive_sync_errors:
+                    self.last_error = ""
                 consecutive_sync_errors = 0
                 self.counters[0] += 1
                 timestamp, raw = sample
