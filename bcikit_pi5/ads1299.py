@@ -73,7 +73,9 @@ class PiADS1299:
             self.lines["drdy"] = drdy
             self.spi = spidev.SpiDev()
             self.spi.open(0, 0)
-            self.spi.no_cs = True
+            # This Pi 5 SPI controller rejects SPI_NO_CS (EINVAL). Its CE0
+            # toggles only GPIO8, which is not wired to the AFE. GPIO16 is the
+            # actual ADS1299 CS and stays asserted across RDATAC frame reads.
             self.spi.mode = 1
             self.spi.max_speed_hz = 4_000_000
             self.spi.bits_per_word = 8
@@ -181,7 +183,11 @@ class PiADS1299:
         self.streaming = True
 
     def read(self, timeout: float = 0.5) -> tuple[int, bytes] | None:
-        if not self.lines["drdy"].event_wait(timeout):
+        # Debian Bookworm's libgpiod 1.x expects integer seconds/nanoseconds,
+        # unlike a typical Python timeout API that accepts a float.
+        seconds = int(timeout)
+        nanoseconds = int((timeout - seconds) * 1_000_000_000)
+        if not self.lines["drdy"].event_wait(seconds, nanoseconds):
             return None
         event = self.lines["drdy"].event_read()
         timestamp_us = event.sec * 1_000_000 + event.nsec // 1000

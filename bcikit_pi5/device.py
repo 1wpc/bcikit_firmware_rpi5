@@ -13,7 +13,9 @@ from .protocol import (ACK, APPLY_FAILED, BUSY, INFO, INVALID_COMMAND,
                        INVALID_LENGTH, INVALID_VALUE, OK, STATUS, UNSUPPORTED,
                        Request, control_frame)
 
-CAPABILITIES = sum(1 << i for i in range(13)) | (1 << 15)
+# Bit 9 promises the full OpenBCI WiFi Shield HTTP/SSDP layer; the Pi host
+# implements only the HTTP subset and must not advertise SSDP discovery.
+CAPABILITIES = sum(1 << i for i in range(9)) | sum(1 << i for i in (10, 11, 12, 15))
 
 
 class Device:

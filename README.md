@@ -2,7 +2,7 @@
 
 Python 3 program for BCIKit AFE8/ADS1299 on Raspberry Pi 5. It implements the **BCIKit Raw Stream v1** and **Device Control v1** command set, 1–4 daisy-chain boards, 250/500 SPS, uniform ADS1299 PGA gain codes 0–6, EEG common-reference / differential / internal-test / input-short profiles, channel mask, counters, and OpenBCI Cyton-format output for a single board at 24×. It includes the OpenBCI-style HTTP reverse-TCP bootstrap (`/board`, `/all`, `/tcp`, `/stream/*`, `/command`) plus a direct TCP endpoint. It does **not** currently implement BLE, UDP, SSDP/mDNS discovery, or a Wi-Fi hotspot; these limitations are not advertised in DEVICE_INFO. The OpenBCI-compatible layer has not yet been verified against OpenBCI GUI on real hardware.
 
-This is an **engineering prototype, not a medical device**. Never connect electrodes to a person while the Pi, USB, mains-powered equipment, or unverified isolation is attached. The current deployment has **no AFE board wired**, so only software simulation has been tested. Simulation is opt-in (`--simulate`) and identifies itself with `hardware_type=0xFE`; normal mode never fabricates samples.
+This is an **engineering prototype, not a medical device**. Never connect electrodes to a person while the Pi, USB, mains-powered equipment, or unverified isolation is attached. One AFE board has now been bench-tested **with electrodes disconnected** on the target Pi: ADS ID and register verification passed, 100 consecutive raw frames were received at both 250 and 500 SPS, and the median DRDY gaps were 4000 and 2000 µs. The 500 SPS check used internal-test profile and 1× gain. Multi-board acquisition and OpenBCI GUI are still unverified on Pi hardware. Simulation remains opt-in (`--simulate`) and identifies itself with `hardware_type=0xFE`; normal mode never fabricates samples.
 
 ## Requirements and pin map
 
@@ -22,7 +22,23 @@ Target: Raspberry Pi 5, Raspberry Pi OS Bookworm 64-bit, Python 3.11, `python3-s
 | PWDN | 23 | 16 | Output, active low |
 | DRDY_CHAIN | 17 | 11 | Falling-edge input |
 
-GPIO is **3.3 V logic only**. GPIO4's alternate-function setting is not enough: the clock generator must be active at 2.048 MHz. This program refuses real acquisition unless SPI0 is present and GPCLK0 is verified through `pinctrl` plus Linux clock debugfs, or `--external-clock` is explicitly used with an independently measured 2.048 MHz oscillator. No clock overlay or SPI setting is installed automatically, because the target Pi currently has an I²S sound-card overlay and remains connected over Wi-Fi. Hardware clock provisioning is a **remaining integration task** before a board can be connected. Use a scope/frequency counter to verify the CLK output; never assume an apparent clock-tree entry means a signal at the header.
+GPIO is **3.3 V logic only**. GPIO4's alternate-function setting is not enough: the clock generator must be active at 2.048 MHz. This program refuses real acquisition unless SPI0 is present and GPCLK0 is verified through `pinctrl` plus Linux clock debugfs, or `--external-clock` is explicitly used with an independently measured 2.048 MHz oscillator. The `clock/` directory contains a small Pi 5 RP1 clock-holder kernel module and systemd unit for the tested Raspberry Pi OS 6.6.51 kernel. It sets GPCLK0 to 2.048 MHz and uses `pinctrl` to route it to GPIO4 without changing Wi-Fi or the existing I²S sound-card overlay. A kernel update requires rebuilding/reinstalling the module. If possible, also verify CLK electrically with a scope/frequency counter; the software preflight is not a substitute for electrical measurement.
+
+After checking the physical wiring and **with electrodes disconnected**, installation on the Pi is:
+
+```bash
+cd ~/Desktop/BCIKit-Pi5/clock
+make
+sudo install -D -m 0644 bcikit_gpclk.ko /lib/modules/$(uname -r)/extra/bcikit_gpclk.ko
+sudo depmod -a
+sudo install -m 0644 bcikit-gpclk.service /etc/systemd/system/bcikit-gpclk.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now bcikit-gpclk.service
+sudo raspi-config nonint do_spi 0
+sudo reboot
+```
+
+Reconnect over SSH after reboot and check `systemctl is-active bcikit-gpclk`, `pinctrl get 4`, `ls -l /dev/spidev0.0`, and `grep clk_gp0 /sys/kernel/debug/clk/clk_summary`. The clock should have an enabled count greater than zero and a 2,048,000 Hz rate. To stop the clock, use `sudo systemctl disable --now bcikit-gpclk.service`; do not stop it during acquisition.
 
 ## Run
 
@@ -32,7 +48,7 @@ python3 -m unittest discover -s tests -v
 python3 -m bcikit_pi5 --simulate --host 127.0.0.1
 ```
 
-Remove `--simulate` only after the AFE is correctly wired, SPI0 enabled and the 2.048 MHz clock verified. Real mode may expose HTTP diagnostics even when hardware is absent, but START and SET_* return `APPLY_FAILED` (status 5) instead of inventing data. Stop with Ctrl-C. `--help` lists all options.
+Remove `--simulate` only after the AFE is correctly wired, SPI0 enabled and the 2.048 MHz clock verified. Real mode may expose HTTP diagnostics even when hardware is absent, but START and SET_* return `APPLY_FAILED` (status 5) instead of inventing data. Stop with Ctrl-C. `--help` lists all options. A manual, non-network, 60-frame hardware smoke test is available as `python3 -m bcikit_pi5.hardware_smoke --electrodes-disconnected`.
 
 For a LAN host, use `http://<pi-ip>:8080`. The current BCIKit Studio `WiFiTransport` can be instantiated with `device_ip=<pi-ip>`, `device_port=8080`, and `require_softap_subnet=False`; its existing GUI currently assumes the ESP32 hotspot subnet and needs a Pi/LAN connection option. Alternatively, a custom client may connect directly to `<pi-ip>:6677` and send the same binary COMMAND frames. Do not switch the development Mac's Wi-Fi to a device hotspot.
 
@@ -40,7 +56,7 @@ The HTTP `/tcp` endpoint accepts a JSON object `{"ip":"<requesting-host-ip>","po
 
 ## Status and troubleshooting
 
-GET_STATUS uses the same 54-byte payload as ESP32: acquisition state, output format, profile, board count, rate, gain, mask, register verification, ADS ID, next sequence, uptime, then eight `uint32` counters in order `drdy`, `frames`, `sync_error`, `spi_error`, `timeout`, `queue_overrun`, `transport_drop`, `register_verify_error`. `/all` adds a human-readable `last_error`. On this Pi, lack of `/dev/spidev0.0` or the 2.048 MHz clock is expected until hardware setup; it is **not** a successful acquisition test.
+GET_STATUS uses the same 54-byte payload as ESP32: acquisition state, output format, profile, board count, rate, gain, mask, register verification, ADS ID, next sequence, uptime, then eight `uint32` counters in order `drdy`, `frames`, `sync_error`, `spi_error`, `timeout`, `queue_overrun`, `transport_drop`, `register_verify_error`. `/all` adds a human-readable `last_error`. If `/dev/spidev0.0` or the 2.048 MHz clock disappears after a kernel update, rebuild/reinstall the clock module and verify the systemd service and SPI0 boot parameter before trying START.
 
 ## Open-source and submodule
 

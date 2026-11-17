@@ -3,3 +3,10 @@ __pycache__/
 .venv/
 .DS_Store
 *.log
+clock/*.ko
+clock/*.o
+clock/*.mod
+clock/*.mod.c
+clock/.*.cmd
+clock/Module.symvers
+clock/modules.order

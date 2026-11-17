@@ -1,0 +1,15 @@
+[Unit]
+Description=BCIKit ADS1299 2.048 MHz clock on Raspberry Pi 5 GPIO4
+After=local-fs.target
+ConditionPathExists=/dev/gpiochip0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/modprobe bcikit_gpclk
+ExecStartPost=/usr/bin/pinctrl set 4 a0
+ExecStop=/usr/bin/pinctrl set 4 ip
+ExecStop=/usr/sbin/modprobe -r bcikit_gpclk
+
+[Install]
+WantedBy=multi-user.target
