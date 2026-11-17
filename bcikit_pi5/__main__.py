@@ -3,11 +3,20 @@
 import argparse
 import asyncio
 import logging
+import signal
 import uuid
 
 from .ads1299 import PiADS1299, Simulator
 from .device import Device
 from .server import Server
+
+
+async def _run_server(server: Server) -> None:
+    task = asyncio.current_task()
+    loop = asyncio.get_running_loop()
+    if task is not None:
+        loop.add_signal_handler(signal.SIGTERM, task.cancel)
+    await server.run()
 
 
 def main() -> None:
@@ -22,8 +31,8 @@ def main() -> None:
     backend = Simulator() if args.simulate else PiADS1299(external_clock=args.external_clock)
     device = Device(backend, uuid.getnode(), simulate=args.simulate)
     try:
-        asyncio.run(Server(device, args.host, args.http_port, args.direct_port).run())
-    except KeyboardInterrupt:
+        asyncio.run(_run_server(Server(device, args.host, args.http_port, args.direct_port)))
+    except (KeyboardInterrupt, asyncio.CancelledError):
         pass
 
 

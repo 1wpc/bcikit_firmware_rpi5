@@ -52,6 +52,20 @@ Remove `--simulate` only after the AFE is correctly wired, SPI0 enabled and the 
 
 For a LAN host, use `http://<pi-ip>:8080`. The current BCIKit Studio `WiFiTransport` can be instantiated with `device_ip=<pi-ip>`, `device_port=8080`, and `require_softap_subnet=False`; its existing GUI currently assumes the ESP32 hotspot subnet and needs a Pi/LAN connection option. Alternatively, a custom client may connect directly to `<pi-ip>:6677` and send the same binary COMMAND frames. Do not switch the development Mac's Wi-Fi to a device hotspot.
 
+### Raspberry Pi local workstation mode
+
+For a Linux ARM64 Studio running **on the same Pi**, install the acquisition service after the clock/SPI setup above:
+
+```bash
+cd ~/Desktop/BCIKit-Pi5
+sudo install -m 0644 systemd/bcikit-acquisition.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now bcikit-acquisition.service
+systemctl is-active bcikit-acquisition.service
+```
+
+This service binds HTTP and native TCP to `127.0.0.1` only. The Studio “树莓派本机” option connects directly to native TCP port 6677 and uses the usual BCIKit control/sample frames; it does not need a hotspot or the reverse-TCP HTTP setup. Only one Studio session can own the device at a time. `sudo systemctl stop bcikit-acquisition.service` stops acquisition and releases GPIO/SPI; the separate GPCLK service remains active. To use the Pi for a remote LAN client instead, stop this local service and run the program explicitly with `--host 0.0.0.0` on a trusted network.
+
 The HTTP `/tcp` endpoint accepts a JSON object `{"ip":"<requesting-host-ip>","port":45123,"output":"auto"}` and opens a reverse TCP connection to that listener. The first valid BCIKit COMMAND claims native mode; `output:"raw"` selects OpenBCI. Only the same requester IP may replace a stale session; disconnect/DELETE automatically stops acquisition. For a native client, send `PING`, `GET_INFO`, `STOP`, `SET_*`, `START`, then read interleaved ACK and SAMPLE frames. See [PROTOCOL.md](PROTOCOL.md) for the complete public wire contract.
 
 ## Status and troubleshooting

@@ -8,7 +8,7 @@ import threading
 import time
 from dataclasses import replace
 
-from .ads1299 import HardwareError, Settings
+from .ads1299 import FrameSyncError, HardwareError, Settings
 from .protocol import (ACK, APPLY_FAILED, BUSY, INFO, INVALID_COMMAND,
                        INVALID_LENGTH, INVALID_VALUE, OK, STATUS, UNSUPPORTED,
                        Request, control_frame)
@@ -36,12 +36,14 @@ class Device:
 
     def _sample_loop(self) -> None:
         discard = 3
+        consecutive_sync_errors = 0
         while self.running.is_set():
             try:
                 sample = self.backend.read(0.5)
                 if sample is None:
                     self.counters[4] += 1
                     continue
+                consecutive_sync_errors = 0
                 self.counters[0] += 1
                 timestamp, raw = sample
                 if discard:
@@ -54,6 +56,12 @@ class Device:
                     self.samples.put_nowait((seq, timestamp, raw))
                 except queue.Full:
                     self.counters[5] += 1
+            except FrameSyncError as exc:
+                self.counters[2] += 1
+                self.last_error = str(exc)
+                consecutive_sync_errors += 1
+                if consecutive_sync_errors >= 8:
+                    self.running.clear()
             except HardwareError as exc:
                 self.counters[2] += 1
                 self.last_error = str(exc)
@@ -168,7 +176,12 @@ class Device:
                     s = replace(s, gain_code=value[0])
             elif code == 10:
                 self.counters = [0] * 8
-            if result == OK and s != self.settings:
+            # A new process starts with default Settings but no ADS1299 readback.
+            # Studio sends SET_BOARD_COUNT(1) even when the value is unchanged and
+            # checks GET_STATUS before START; initialize hardware at that point.
+            if result == OK and code in (6, 7, 8, 9, 12) and (
+                s != self.settings or not self.backend.verified
+            ):
                 try:
                     self.backend.configure(s)
                     self.settings = s

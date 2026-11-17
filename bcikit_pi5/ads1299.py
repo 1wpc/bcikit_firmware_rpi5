@@ -20,6 +20,10 @@ class HardwareError(RuntimeError):
     pass
 
 
+class FrameSyncError(HardwareError):
+    """A malformed RDATAC sample; the next DRDY may still be usable."""
+
+
 class PiADS1299:
     """Uses an externally configured 2.048 MHz GPCLK0 on GPIO4.
 
@@ -193,7 +197,7 @@ class PiADS1299:
         timestamp_us = event.sec * 1_000_000 + event.nsec // 1000
         raw = self._xfer(bytes(self.settings.board_count * 27))
         if any((raw[i * 27] & 0xF0) != 0xC0 for i in range(self.settings.board_count)):
-            raise HardwareError("ADS1299 stream status sync lost")
+            raise FrameSyncError("ADS1299 stream status sync lost")
         return timestamp_us, raw
 
     def stop(self) -> None:

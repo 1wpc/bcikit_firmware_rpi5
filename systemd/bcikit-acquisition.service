@@ -1,0 +1,20 @@
+[Unit]
+Description=BCIKit AFE8 acquisition service (local-only)
+Requires=bcikit-gpclk.service
+After=bcikit-gpclk.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+SupplementaryGroups=gpio spi
+WorkingDirectory=/home/pi/Desktop/BCIKit-Pi5
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m bcikit_pi5 --host 127.0.0.1 --http-port 8080 --direct-port 6677
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
